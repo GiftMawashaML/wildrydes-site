@@ -24,12 +24,14 @@ var WildRydes = window.WildRydes || {};
     }
 
     WildRydes.signOut = function signOut() {
-        userPool.getCurrentUser().signOut();
+        var cognitoUser = userPool.getCurrentUser();
+        if (cognitoUser) {
+            cognitoUser.signOut();
+        }
     };
 
     WildRydes.authToken = new Promise(function fetchCurrentAuthToken(resolve, reject) {
         var cognitoUser = userPool.getCurrentUser();
-
         if (cognitoUser) {
             cognitoUser.getSession(function sessionCallback(err, session) {
                 if (err) {
@@ -45,6 +47,7 @@ var WildRydes = window.WildRydes || {};
         }
     });
 
+    // Register new user
     function register(email, password, onSuccess, onFailure) {
         var dataEmail = {
             Name: 'email',
@@ -62,6 +65,7 @@ var WildRydes = window.WildRydes || {};
         }, secretHash); // Pass secret hash here
     }
 
+    // Sign in existing user
     function signin(email, password, onSuccess, onFailure) {
         var secretHash = getSecretHash(email); // Calculate secret hash
 
@@ -78,6 +82,7 @@ var WildRydes = window.WildRydes || {};
         });
     }
 
+    // Verify user after registration
     function verify(email, code, onSuccess, onFailure) {
         createCognitoUser(email).confirmRegistration(code, true, function confirmCallback(err, result) {
             if (!err) {
@@ -88,6 +93,7 @@ var WildRydes = window.WildRydes || {};
         });
     }
 
+    // Create CognitoUser for authentication
     function createCognitoUser(email) {
         return new AmazonCognitoIdentity.CognitoUser({
             Username: email, // Use email directly
@@ -95,24 +101,26 @@ var WildRydes = window.WildRydes || {};
         });
     }
 
-    function toUsername(email) {
-        return email.replace('@', '-at-');
-    }
-
+    // Get Secret Hash for Cognito authentication
     function getSecretHash(username) {
         var clientId = _config.cognito.userPoolClientId;
         var clientSecret = _config.cognito.clientSecret;
-        var message = username + clientId;
-        var hash = CryptoJS.HmacSHA256(message, clientSecret);
-        return hash.toString(CryptoJS.enc.Base64);
+        if (clientSecret) {
+            var message = username + clientId;
+            var hash = CryptoJS.HmacSHA256(message, clientSecret);
+            return hash.toString(CryptoJS.enc.Base64);
+        }
+        return null; // No secret hash if no client secret is used
     }
 
+    // When the document is ready, attach event listeners
     $(function onDocReady() {
         $('#signinForm').submit(handleSignin);
         $('#registrationForm').submit(handleRegister);
         $('#verifyForm').submit(handleVerify);
     });
 
+    // Handle Sign In form submission
     function handleSignin(event) {
         var email = $('#emailInputSignin').val();
         var password = $('#passwordInputSignin').val();
@@ -128,6 +136,7 @@ var WildRydes = window.WildRydes || {};
         );
     }
 
+    // Handle Register form submission
     function handleRegister(event) {
         var email = $('#emailInputRegister').val();
         var password = $('#passwordInputRegister').val();
@@ -136,14 +145,14 @@ var WildRydes = window.WildRydes || {};
         var onSuccess = function registerSuccess(result) {
             var cognitoUser = result.user;
             console.log('user name is ' + cognitoUser.getUsername());
-            var confirmation = ('Registration successful. Please check your email inbox or spam folder for your verification code.');
-            if (confirmation) {
-                window.location.href = 'verify.html';
-            }
+            alert('Registration successful. Please check your email inbox or spam folder for your verification code.');
+            window.location.href = 'verify.html';
         };
+
         var onFailure = function registerFailure(err) {
-            alert(err);
+            alert('Error: ' + err.message);
         };
+
         event.preventDefault();
 
         if (password === password2) {
@@ -153,6 +162,7 @@ var WildRydes = window.WildRydes || {};
         }
     }
 
+    // Handle Verify form submission
     function handleVerify(event) {
         var email = $('#emailInputVerify').val();
         var code = $('#codeInputVerify').val();
@@ -160,12 +170,11 @@ var WildRydes = window.WildRydes || {};
         verify(email, code,
             function verifySuccess(result) {
                 console.log('call result: ' + result);
-                console.log('Successfully verified');
                 alert('Verification successful. You will now be redirected to the login page.');
                 window.location.href = signinUrl;
             },
             function verifyError(err) {
-                alert(err);
+                alert('Error: ' + err.message);
             }
         );
     }
