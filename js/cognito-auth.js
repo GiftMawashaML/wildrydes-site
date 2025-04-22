@@ -14,6 +14,7 @@ var WildRydes = window.WildRydes || {};
 
     if (!(_config.cognito.userPoolId &&
           _config.cognito.userPoolClientId &&
+          _config.cognito.clientSecret &&
           _config.cognito.region)) {
         $('#noCognitoMessage').show();
         return;
@@ -47,6 +48,15 @@ var WildRydes = window.WildRydes || {};
         }
     });
 
+    /*
+     * Helper to generate secret hash
+     */
+    function getSecretHash(username) {
+        var key = _config.cognito.clientSecret;
+        var message = username + _config.cognito.userPoolClientId;
+        var hash = CryptoJS.HmacSHA256(message, key);
+        return CryptoJS.enc.Base64.stringify(hash);
+    }
 
     /*
      * Cognito User Pool functions
@@ -59,21 +69,29 @@ var WildRydes = window.WildRydes || {};
         };
         var attributeEmail = new AmazonCognitoIdentity.CognitoUserAttribute(dataEmail);
 
-        userPool.signUp(toUsername(email), password, [attributeEmail], null,
+        var username = toUsername(email);
+        var secretHash = getSecretHash(username);
+
+        userPool.signUp(username, password, [attributeEmail], null,
             function signUpCallback(err, result) {
                 if (!err) {
                     onSuccess(result);
                 } else {
                     onFailure(err);
                 }
-            }
+            },
+            secretHash // Pass the secret hash here
         );
     }
 
     function signin(email, password, onSuccess, onFailure) {
+        var username = toUsername(email);
+        var secretHash = getSecretHash(username);
+
         var authenticationDetails = new AmazonCognitoIdentity.AuthenticationDetails({
-            Username: toUsername(email),
-            Password: password
+            Username: username,
+            Password: password,
+            SecretHash: secretHash
         });
 
         var cognitoUser = createCognitoUser(email);
